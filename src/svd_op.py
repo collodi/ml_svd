@@ -7,16 +7,16 @@ def batch_svd(X):
 	V = torch.stack([v for _, _, v in matrices], dim=0)
 	return U, E, V
 
-def svdcols(U, E, V):
+def svdcols(U, V):
 	return torch.stack([
-		torch.cat((U[:, i], V[:, j] * E[j]), dim=0)
+		torch.cat((U[:, i], V[:, j]), dim=0)
 		for i in range(U.size(1))
 		for j in range(V.size(1))
 	], dim=0)
 
-def batch_svdcols(U, E, V):
+def batch_svdcols(U, V):
 	 return torch.cat([
-		svdcols(u, e, v) for u, e, v in zip(U, E, V)
+		svdcols(u, v) for u, v in zip(U, V)
 	], dim=0)
 
 def batch_unsvd(U, E, V):

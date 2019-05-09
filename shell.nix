@@ -1,4 +1,6 @@
-with import <nixpkgs> {};
+{ pkgs ? import <nixpkgs> {}, cudaSupport ? false }:
+
+with pkgs;
 let
 
   python =
@@ -17,7 +19,7 @@ let
       };
 
     in (python3.override { inherit packageOverrides; }).withPackages(ps:
-      with ps; [ pytorch torchvision ]
+      with ps; [ pytorch torchvision termcolor ]
     );
 
     magma = callPackage ./magma.nix { cudatoolkit = cudatoolkit_10; };
@@ -25,7 +27,9 @@ let
 in stdenv.mkDerivation rec {
   name = "ml-svd";
 
-  buildInputs = [ magma python ];
+  buildInputs = [ python ]
+    ++ lib.optional cudaSupport [ magma ]
+  ;
 
   env = buildEnv { name = name; paths = buildInputs; };
 }
