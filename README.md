@@ -1,4 +1,4 @@
-ml_svd
+svd_layer
 ===
 
 Machine learning layer using singular-value decomposition
@@ -9,13 +9,13 @@ Problem
 
 We need a layer that can handle large input with a relatively small number of parameters.
 
-*Convolutional networks?*  
+*Convolutional networks?*
 True, but they don't work too well on discrete data.
 
-*So, how well does this perform on discrete data?*  
+*So, how well does this perform on discrete data?*
 I have no idea yet. More experiments will be posted.
 
-*Where is SVD?*  
+*Where is SVD?*
 Trust me, or just look at the next section.
 
 
@@ -37,7 +37,7 @@ An `SVDLayer` is defined with 2 arguments: input size `(h, w)` and output size `
 Now, the matrix `A` transforms each column of `U` into a vector of length `h0`.
 Similarly, matrix `B` transforms each column of `V` into a vector of length `w0`.
 
-Let's say `Y = SVDLayer(X)`. 
+Let's say `Y = SVDLayer(X)`.
 
 Let `U0 = A U` and `V0 = B V`.
 Here comes a magic trick that removes SVD from `SVDLayer`.

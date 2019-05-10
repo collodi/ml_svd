@@ -19,7 +19,7 @@ let
       };
 
     in (python3.override { inherit packageOverrides; }).withPackages(ps:
-      with ps; [ pytorch torchvision termcolor ]
+      with ps; [ pytorch torchvision termcolor graph-tool ]
     );
 
     magma = callPackage ./magma.nix { cudatoolkit = cudatoolkit_10; };
