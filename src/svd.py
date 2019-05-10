@@ -5,36 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
-import svd_op
 from tools import print_tensor, print_tensors
 
-# width = number of input columns
-# height = number of input rows
-#
-# `net` takes a concatenation of 2 vectors (say u and v) and outputs a single value
-# which corresponds to the importance of the matrix produced by u * v^T.
-#
-# u is a column of U and v is a column of V
 class SVDLayer(nn.Module):
-	def __init__(self, h, w):
-		super().__init__()
-
-		self.net = nn.Linear(h + w, 1)
-		self.wt = nn.Linear(w, w)
-
-	def forward(self, x):
-		U, E, V = svd_op.batch_svd(x)
-
-		cols = svd_op.batch_svdcols(U, V)
-
-		weights = self.net(cols).view(*E.shape)
-		alpha = F.softmax(self.wt(weights), dim=-1) # dist. among cols
-		beta = F.softmax(self.wt(weights), dim=-2) # dist. among rows
-
-		E_hat = E.bmm(alpha) + beta.bmm(E)
-		return svd_op.batch_unsvd(U, E_hat, V)
-
-class SVDReduce(nn.Module):
 	def __init__(self, in_size, out_size, bias=True):
 		super().__init__()
 
@@ -78,7 +51,7 @@ class Net(nn.Module):
 		]
 
 		self.svds = nn.ModuleList([
-			SVDReduce(a, b)
+			SVDLayer(a, b)
 			for a, b in zip(sizes, sizes[1:])
 		])
 
