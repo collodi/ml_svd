@@ -5,8 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
-from tools import print_tensor, print_tensors
-
 class SVDLayer(nn.Module):
 	def __init__(self, in_size, out_size, bias=True):
 		super().__init__()
