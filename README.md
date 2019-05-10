@@ -1,7 +1,7 @@
 ml_svd
 ===
 
-Machine learning using singular-value decomposition
+Machine learning layer using singular-value decomposition
 
 
 Problem
