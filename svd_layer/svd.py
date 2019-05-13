@@ -5,12 +5,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
+def _pair(x):
+	if isinstance(x, tuple):
+		return x
+	else:
+		return (x, x)
+
 class SVDLayer(nn.Module):
 	def __init__(self, in_size, out_size, bias=True):
 		super().__init__()
 
-		ih, iw = in_size
-		oh, ow = out_size
+		ih, iw = _pair(in_size)
+		oh, ow = _pair(out_size)
 
 		self.w1 = Parameter(torch.Tensor(oh, ih))
 		# def.d transposed instead of transposing every forward call
@@ -37,6 +43,11 @@ class SVDLayer(nn.Module):
 	def forward(self, x):
 		a = self.w1.matmul(x)
 		return a.matmul(self.w2)
+
+	def __repr__(self):
+		oh, ih = self.w1.shape
+		iw, ow = self.w2.shape
+		return f'SVDLayer with ({ih}, {iw}) -> ({oh}, {ow})'
 
 class Net(nn.Module):
 	def __init__(self):
