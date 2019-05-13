@@ -50,3 +50,10 @@ Y = U0 E V0^
 ```
 
 Tada.
+
+TODOs
+---
+
+- [ ] compare number of parameters
+- [ ] compare training time
+- [ ] compare performance
