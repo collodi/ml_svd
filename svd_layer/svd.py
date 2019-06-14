@@ -44,12 +44,80 @@ class SVDLayer(nn.Module):
 	def forward(self, x):
 		a = self.w1.matmul(x)
 		y = a.matmul(self.w2)
-		return y + self.bias
+
+		if self.bias is not None:
+			return y + self.bias
+		else:
+			return y
 
 	def __repr__(self):
 		oh, ih = self.w1.shape
 		iw, ow = self.w2.shape
 		return f'SVDLayer ({ih}, {iw}) -> ({oh}, {ow})'
+
+class LeftSVDLayer(nn.Module):
+	def __init__(self, ih, oh, dropout=None, bias=True):
+		super().__init__()
+
+		self.weight = Parameter(torch.Tensor(oh, ih))
+		self.dropout = dropout
+
+		if bias:
+			self.bias = Parameter(torch.Tensor(oh, 1))
+		else:
+			self.register_parameter('bias', None)
+
+		self.reset_parameters()
+
+	def reset_parameters(self):
+		nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+
+		if self.bias is not None:
+			fin, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+			bound = 1. / math.sqrt(fin / 2.)
+			nn.init.uniform_(self.bias, -bound, bound)
+
+	def forward(self, x):
+		y = self.weight.matmul(x)
+		if self.bias is not None:
+			y = y + self.bias
+
+		if self.dropout is not None:
+			y = F.dropout(y, p=self.dropout)
+
+		return y
+
+class RightSVDLayer(nn.Module):
+	def __init__(self, iw, ow, dropout=None, bias=True):
+		super().__init__()
+
+		self.weight = Parameter(torch.Tensor(iw, ow))
+		self.dropout = dropout
+
+		if bias:
+			self.bias = Parameter(torch.Tensor(ow))
+		else:
+			self.register_parameter('bias', None)
+
+		self.reset_parameters()
+
+	def reset_parameters(self):
+		nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+
+		if self.bias is not None:
+			fin, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+			bound = 1. / math.sqrt(fin / 2.)
+			nn.init.uniform_(self.bias, -bound, bound)
+
+	def forward(self, x):
+		y = x.matmul(self.weight)
+		if self.bias is not None:
+			y = y + self.bias
+
+		if self.dropout is not None:
+			y = F.dropout(y, p=self.dropout)
+
+		return y
 
 class FoldedSVDLayer(nn.Module):
 	def __init__(self, in_size, out_size, bias=True):
@@ -58,9 +126,8 @@ class FoldedSVDLayer(nn.Module):
 		ih, iw = _pair(in_size)
 		oh, ow = _pair(out_size)
 
-		self.w1 = Parameter(torch.Tensor(oh, ih))
-		# def.d transposed instead of transposing every forward call
-		self.w2 = Parameter(torch.Tensor(iw, ow))
+		self.lprm = LeftSVDLayer(ih, oh, bias=bias)
+		self.rprm = RightSVDLayer(iw, ow, bias=bias)
 
 		if bias:
 			self.bias = Parameter(torch.Tensor(oh, ow))
@@ -70,12 +137,12 @@ class FoldedSVDLayer(nn.Module):
 		self.reset_parameters()
 
 	def reset_parameters(self):
-		nn.init.kaiming_uniform_(self.w1, a=math.sqrt(5))
-		nn.init.kaiming_uniform_(self.w2, a=math.sqrt(5))
+		self.lprm.reset_parameters()
+		self.rprm.reset_parameters()
 
 		if self.bias is not None:
-			fin1, _ = nn.init._calculate_fan_in_and_fan_out(self.w1)
-			fin2, _ = nn.init._calculate_fan_in_and_fan_out(self.w2)
+			fin1, _ = nn.init._calculate_fan_in_and_fan_out(self.lprm.weight)
+			fin2, _ = nn.init._calculate_fan_in_and_fan_out(self.rprm.weight)
 
 			bound = 1. / math.sqrt((fin1 + fin2) / 2.)
 			nn.init.uniform_(self.bias, -bound, bound)
@@ -86,60 +153,45 @@ class FoldedSVDLayer(nn.Module):
 
 		y = None
 		if a < 0.5:
-			a = self.w1.matmul(x)
-			y = a.matmul(self.w2)
+			x = self.lprm(x)
+			x = self.rprm(x)
 		else:
-			b = x.matmul(self.w2)
-			y = self.w1.matmul(b)
+			x = self.rprm(x)
+			x = self.lprm(x)
 
-		return y + self.bias
-
-	def __repr__(self):
-		oh, ih = self.w1.shape
-		iw, ow = self.w2.shape
-		return f'FoldedSVDLayer ({ih}, {iw}) -> ({oh}, {ow})'
+		if self.bias is not None:
+			return x + self.bias
+		else:
+			return x
 
 class StackedSVDLayer(nn.Module):
-	def __init__(self, *sizes, bias=True):
+	def __init__(self, *sizes, dropout=None, bias=True):
 		super().__init__()
 
 		sizes = [ _pair(x) for x in sizes ]
 
-		self.lprms = []
-		self.rprms = []
+		self.lprms = nn.ModuleList()
+		self.rprms = nn.ModuleList()
 
 		for (ih, iw), (oh, ow) in zip(sizes, sizes[1:]):
-			self.lprms.append(Parameter(torch.Tensor(oh, ih)))
-			# def.d transposed instead of transposing every forward call
-			self.rprms.append(Parameter(torch.Tensor(iw, ow)))
-
-		if bias:
-			self.bias = Parameter(torch.Tensor(*sizes[-1]))
-		else:
-			self.register_parameter('bias', None)
-
-		self.reset_parameters()
+			self.lprms.append(LeftSVDLayer(ih, oh, dropout, bias))
+			self.rprms.append(RightSVDLayer(iw, ow, dropout, bias))
 
 	def reset_parameters(self):
 		for lprm, rprm in zip(self.lprms, self.rprms):
-			nn.init.kaiming_uniform_(lprm, a=math.sqrt(5))
-			nn.init.kaiming_uniform_(rprm, a=math.sqrt(5))
-
-		if self.bias is not None:
-			fin1, _ = nn.init._calculate_fan_in_and_fan_out(self.lprms[-1])
-			fin2, _ = nn.init._calculate_fan_in_and_fan_out(self.rprms[-1])
-
-			bound = 1. / math.sqrt((fin1 + fin2) / 2.)
-			nn.init.uniform_(self.bias, -bound, bound)
+			lprm.reset_parameters()
+			rprm.reset_parameters()
 
 	def finish_left(self, x, idx):
-		for i < range(idx, len(self.lprms)):
-			x = self.lprms[i].matmul(x)
+		for i in range(idx, len(self.lprms)):
+			x = self.lprms[i](x)
+			x = F.relu(x)
 		return x
 
 	def finish_right(self, x, idx):
-		for i < range(idx, len(self.rprms)):
-			x = x.matmul(self.rprms[i])
+		for i in range(idx, len(self.rprms)):
+			x = self.rprms[i](x)
+			x = F.relu(x)
 		return x
 
 	def forward(self, x):
@@ -153,12 +205,17 @@ class StackedSVDLayer(nn.Module):
 				x = self.finish_left(x, il)
 				break
 
+			lc = len(self.lprms) - il
+			rc = len(self.rprms) - ir
+
 			a = random.random()
-			if a < .5:
-				x = self.lprms[il].matmul(x)
+			if a < lc / (lc + rc):
+				x = self.lprms[il](x)
+				x = F.relu(x)
 				il += 1
 			else:
-				x = x.matmul(self.rprms[ir])
+				x = self.rprms[ir](x)
+				x = F.relu(x)
 				ir += 1
 
 		return x

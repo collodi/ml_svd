@@ -1,1 +1,1 @@
-from .svd import SVDLayer, FoldedSVDLayer
+from .svd import SVDLayer, FoldedSVDLayer, StackedSVDLayer
